@@ -6,11 +6,15 @@ how agents receive their AI client dependency and exposes a
 convenience `_call` helper for chat completions.
 """
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
 from app.integrations.ai_models.base import BaseAIClient, ChatMessage, ChatResponse
+
+# Max seconds to wait for a single AI API call before giving up.
+_CALL_TIMEOUT_SECONDS = 60
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +57,15 @@ class BaseAgent(ABC):
             kwargs,
         )
 
-        response = await self._client.chat(messages, **kwargs)
+        try:
+            response = await asyncio.wait_for(
+                self._client.chat(messages, **kwargs),
+                timeout=_CALL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise TimeoutError(
+                f"[{self._name}] AI call timed out after {_CALL_TIMEOUT_SECONDS}s"
+            )
 
         logger.debug(
             "[%s] AI response  model=%s  tokens=%s  content_len=%d",

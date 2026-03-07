@@ -74,6 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         critic=app.state.critic_agent,
         judge=app.state.judge_agent,
         rounds=settings.debate_rounds,
+        num_comments=1,  # 1 candidate keeps critic/judge calls minimal
     )
     logger.info("AI agents initialised (including debate system)")
 

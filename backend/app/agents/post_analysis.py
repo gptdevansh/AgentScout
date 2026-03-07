@@ -142,9 +142,9 @@ class PostAnalysisAgent(BaseAgent):
                     exc_info=True,
                 )
 
-            # Brief pause every 5 calls to stay under rate limits
-            if i % 5 == 0:
-                await asyncio.sleep(2)
+            # Pause every 3 calls to stay under DeepSeek 20 req/min limit
+            if i % 3 == 0:
+                await asyncio.sleep(4)
 
         # Sort by relevance descending, then opportunity descending
         results.sort(

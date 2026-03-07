@@ -97,6 +97,15 @@ export interface PipelineRunPostOut {
   source_query: string | null;
   created_at: string;
   analysis: AnalysisOut | null;
+  comment_candidates: CommentOut[];
+}
+
+/* ── Async pipeline start response ──────────────────────────────────── */
+
+export interface PipelineStartResponse {
+  run_id: string;
+  status: string;
+  message: string;
 }
 
 export interface PipelineRunOut {

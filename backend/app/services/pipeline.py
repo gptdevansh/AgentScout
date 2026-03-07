@@ -86,10 +86,11 @@ class PipelineOrchestrator:
         *,
         problem_description: str,
         product_description: str | None = None,
-        num_queries: int = 5,
-        max_posts_per_query: int = 5,
-        min_relevance: float = 0.5,
+        num_queries: int = 3,
+        max_posts_per_query: int = 3,
+        min_relevance: float = 0.1,
         platform: str = "linkedin",
+        existing_run_id: uuid.UUID | None = None,
     ) -> PipelineResult:
         """Execute the full pipeline.
 
@@ -100,22 +101,30 @@ class PipelineOrchestrator:
             max_posts_per_query: Max posts per query from the scraper.
             min_relevance:      Minimum relevance score to proceed to debate.
             platform:           Target platform (default 'linkedin').
-
-        Returns:
-            A PipelineResult with counts, summaries, and any errors.
+            existing_run_id:    If provided, resume/update this run record
+                                instead of creating a new one.
         """
         result = PipelineResult(
             problem_description=problem_description,
             product_description=product_description,
         )
 
-        # ── Create a pipeline-run record in the DB ───────────────────────
-        pipeline_run = await self._persistence.create_pipeline_run(
-            problem_description=problem_description,
-            product_description=product_description,
-            platform=platform,
-        )
-        result.run_id = pipeline_run.id
+        # ── Create or reuse a pipeline-run record in the DB ─────────────
+        if existing_run_id is not None:
+            # The route already created the record; just fetch it
+            from sqlalchemy import select
+            from app.models.pipeline_run import PipelineRun as PipelineRunModel
+            stmt = select(PipelineRunModel).where(PipelineRunModel.id == existing_run_id)
+            db_result = await self._session.execute(stmt)
+            pipeline_run = db_result.scalar_one()
+            result.run_id = pipeline_run.id
+        else:
+            pipeline_run = await self._persistence.create_pipeline_run(
+                problem_description=problem_description,
+                product_description=product_description,
+                platform=platform,
+            )
+            result.run_id = pipeline_run.id
 
         # ── Step 1: Generate search queries ──────────────────────────────
         t0 = _now_ms()
@@ -132,6 +141,7 @@ class PipelineOrchestrator:
             await self._persistence.update_pipeline_run(
                 pipeline_run, queries=queries,
             )
+            await self._session.commit()  # flush progress for polling
             logger.info("[pipeline] generated %d queries", len(queries))
         except Exception as exc:
             msg = f"Query generation failed: {exc}"
@@ -166,6 +176,7 @@ class PipelineOrchestrator:
             await self._persistence.update_pipeline_run(
                 pipeline_run, posts_found=len(scraped_posts),
             )
+            await self._session.commit()  # flush progress for polling
             logger.info("[pipeline] scraped %d unique posts", len(scraped_posts))
         except Exception as exc:
             msg = f"Scraping failed: {exc}"
@@ -187,23 +198,50 @@ class PipelineOrchestrator:
 
         # ── Step 3: Analyse posts ────────────────────────────────────────
         t0 = _now_ms()
+        all_analysed: list[tuple[ScrapedPost, PostAnalysisResult]] = []
+        # Cap the number of posts analysed to avoid DeepSeek rate limits.
+        # 49 posts → 429 errors; 15 is safely within the 20 req/min limit
+        # when each analysis call takes ~2-3s.
+        MAX_ANALYSIS_POSTS = 15
+        posts_to_analyse = scraped_posts[:MAX_ANALYSIS_POSTS]
+        if len(scraped_posts) > MAX_ANALYSIS_POSTS:
+            logger.info(
+                "[pipeline] capping analysis input from %d → %d posts",
+                len(scraped_posts),
+                MAX_ANALYSIS_POSTS,
+            )
         try:
-            analysed = await self._analyser.run_batch(
-                scraped_posts,
+            # Analyse ALL posts (min_relevance=0) so we always have results to fall back to
+            all_analysed = await self._analyser.run_batch(
+                posts_to_analyse,
                 problem_description=problem_description,
                 product_description=product_description,
-                min_relevance=min_relevance,
+                min_relevance=0.0,
             )
-            result.posts_analysed = len(scraped_posts)
+            # Apply the user's requested filter for stats
+            analysed = [
+                (sp, ar) for sp, ar in all_analysed
+                if ar.relevance_score >= min_relevance
+            ]
+            # Fallback: if filter is too strict, use top-3 by combined score
+            if not analysed and all_analysed:
+                logger.info(
+                    "[pipeline] no posts above min_relevance=%.2f; using top-3 by score",
+                    min_relevance,
+                )
+                analysed = all_analysed[:3]
+
+            result.posts_analysed = len(posts_to_analyse)
             result.posts_relevant = len(analysed)
             result.steps.append(
                 PipelineStepSummary("analysis", len(analysed), _elapsed(t0)),
             )
             await self._persistence.update_pipeline_run(
                 pipeline_run,
-                posts_analysed=len(scraped_posts),
+                posts_analysed=len(posts_to_analyse),
                 posts_relevant=len(analysed),
             )
+            await self._session.commit()  # flush progress for polling
             logger.info(
                 "[pipeline] %d/%d posts above min_relevance=%.2f",
                 len(analysed),
@@ -235,7 +273,7 @@ class PipelineOrchestrator:
                 )
 
         if not analysed:
-            result.errors.append("No relevant posts after analysis")
+            result.errors.append("No posts available for comment generation")
             await self._persistence.update_pipeline_run(
                 pipeline_run, status=RunStatus.COMPLETED, errors=result.errors,
             )

@@ -9,6 +9,7 @@ deployed behind an OpenAI-compatible endpoint (GPT, DeepSeek, etc.).
 import logging
 from typing import Any
 
+import httpx
 from openai import AsyncAzureOpenAI
 
 from app.integrations.ai_models.base import BaseAIClient, ChatMessage, ChatResponse
@@ -28,15 +29,19 @@ class OpenAIClient(BaseAIClient):
         model_name: str,
         default_temperature: float = 0.7,
         default_max_tokens: int = 4096,
+        supports_temperature: bool = True,
     ) -> None:
         self._model_name = model_name
         self._default_temperature = default_temperature
         self._default_max_tokens = default_max_tokens
+        self._supports_temperature = supports_temperature
 
+        # 45s connect+read timeout — prevents hanging indefinitely on slow/rate-limited calls.
         self._client = AsyncAzureOpenAI(
             api_key=api_key,
             azure_endpoint=endpoint,
             api_version=api_version,
+            http_client=httpx.AsyncClient(timeout=httpx.Timeout(45.0)),
         )
         logger.info("Initialised OpenAIClient for model=%s", model_name)
 
@@ -74,12 +79,15 @@ class OpenAIClient(BaseAIClient):
             max_tokens,
         )
 
-        response = await self._client.chat.completions.create(
-            model=self._model_name,
-            messages=payload,  # type: ignore[arg-type]
-            temperature=temperature,
-            max_completion_tokens=max_tokens,
-        )
+        create_kwargs: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": payload,  # type: ignore[arg-type]
+            "max_completion_tokens": max_tokens,
+        }
+        if self._supports_temperature:
+            create_kwargs["temperature"] = temperature
+
+        response = await self._client.chat.completions.create(**create_kwargs)
 
         choice = response.choices[0]
         usage = {}

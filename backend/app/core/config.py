@@ -80,9 +80,9 @@ class Settings(BaseSettings):
     apify_api_token: str = ""
 
     # ── Rate Limits / Tuning ─────────────────────────────────────────────
-    max_search_queries: int = Field(default=5, ge=1, le=100)
-    max_posts_per_query: int = Field(default=5, ge=1, le=50)
-    debate_rounds: int = Field(default=3, ge=1, le=10)
+    max_search_queries: int = Field(default=3, ge=1, le=100)
+    max_posts_per_query: int = Field(default=3, ge=1, le=50)
+    debate_rounds: int = Field(default=1, ge=1, le=10)
 
 
 @lru_cache

@@ -24,10 +24,20 @@ class PipelineRequest(BaseModel):
         max_length=3000,
         examples=["Our tool parallelizes test suites and caches artifacts across builds"],
     )
-    num_queries: int = Field(default=5, ge=1, le=100)
-    max_posts_per_query: int = Field(default=5, ge=1, le=50)
-    min_relevance: float = Field(default=0.5, ge=0.0, le=1.0)
+    num_queries: int = Field(default=3, ge=1, le=100)
+    max_posts_per_query: int = Field(default=3, ge=1, le=50)
+    min_relevance: float = Field(default=0.1, ge=0.0, le=1.0)
     platform: str = Field(default="linkedin", max_length=50)
+
+
+# ── Async start response ─────────────────────────────────────────────────
+
+class PipelineStartResponse(BaseModel):
+    """Returned immediately when a pipeline run is kicked off asynchronously."""
+
+    run_id: uuid.UUID
+    status: str = "running"
+    message: str = "Pipeline started. Poll /api/v1/pipeline/runs/{run_id} for status."
 
 
 # ── Step summary ─────────────────────────────────────────────────────────
@@ -146,6 +156,7 @@ class PipelineRunPostOut(BaseModel):
     source_query: str | None = None
     created_at: datetime
     analysis: AnalysisOut | None = None
+    comment_candidates: list[CommentOut] = []
 
 
 class PipelineRunOut(BaseModel):

@@ -5,7 +5,7 @@ import type {
   CommentStatus,
   HealthResponse,
   PipelineRequest,
-  PipelineResponse,
+  PipelineStartResponse,
   PipelineRunListOut,
   PipelineRunOut,
   PostDetailOut,
@@ -59,8 +59,8 @@ export function getHealth(): Promise<HealthResponse> {
 
 /* ── Pipeline ─────────────────────────────────────────────────────────── */
 
-export function runPipeline(body: PipelineRequest): Promise<PipelineResponse> {
-  return request<PipelineResponse>(`${BASE}/pipeline`, {
+export function runPipeline(body: PipelineRequest): Promise<PipelineStartResponse> {
+  return request<PipelineStartResponse>(`${BASE}/pipeline`, {
     method: 'POST',
     body: JSON.stringify(body),
   });

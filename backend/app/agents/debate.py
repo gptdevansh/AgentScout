@@ -217,7 +217,7 @@ class DebateOrchestrator:
 
             # Pause between posts to stay under rate limits
             if i < len(posts):
-                await asyncio.sleep(3)
+                await asyncio.sleep(5)
 
         logger.info(
             "[debate] batch complete: %d/%d posts processed",

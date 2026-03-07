@@ -38,12 +38,18 @@ class PersistenceService:
     async def create_pipeline_run(
         self,
         *,
+        run_id: uuid.UUID | None = None,
         problem_description: str,
         product_description: str | None = None,
         platform: str = "linkedin",
     ) -> PipelineRun:
-        """Create a new pipeline run record in RUNNING status."""
-        run = PipelineRun(
+        """Create a new pipeline run record in RUNNING status.
+
+        Args:
+            run_id: Optional pre-generated UUID.  Lets callers know the ID
+                    before the row is committed (e.g. for async start responses).
+        """
+        kwargs: dict = dict(
             problem_description=problem_description,
             product_description=product_description,
             platform=platform,
@@ -51,6 +57,9 @@ class PersistenceService:
             queries=[],
             errors=[],
         )
+        if run_id is not None:
+            kwargs["id"] = run_id
+        run = PipelineRun(**kwargs)
         self._session.add(run)
         await self._session.flush()
         return run
