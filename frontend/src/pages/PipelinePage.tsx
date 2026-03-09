@@ -340,7 +340,7 @@ function PipelineResults({ data }: { data: PipelineRunOut }) {
             <div className="flex flex-wrap gap-2">
               {data.queries.map((q, i) => (
                 <Badge key={i} variant="info">
-                  {q}
+                  {typeof q === 'string' ? q : q.value}
                 </Badge>
               ))}
             </div>

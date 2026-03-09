@@ -9,7 +9,7 @@ extensible to new platforms.
 
 from abc import ABC, abstractmethod
 
-from app.services.scraping.models import ScrapedPost
+from app.services.scraping.models import ScrapedPost, ScrapingWeapon
 
 
 class ScraperPlatform(ABC):
@@ -24,7 +24,7 @@ class ScraperPlatform(ABC):
     @abstractmethod
     async def search_posts(
         self,
-        query: str,
+        query: str | ScrapingWeapon,
         *,
         max_results: int = 10,
     ) -> list[ScrapedPost]:

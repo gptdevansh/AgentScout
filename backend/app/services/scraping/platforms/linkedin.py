@@ -12,7 +12,7 @@ from typing import Any
 
 from app.integrations.apify.client import ApifyClient
 from app.services.scraping.base import ScraperPlatform
-from app.services.scraping.models import ScrapedPost
+from app.services.scraping.models import ScrapedPost, ScrapingWeapon
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +35,14 @@ class LinkedInScraper(ScraperPlatform):
 
     async def search_posts(
         self,
-        query: str,
+        query: str | ScrapingWeapon,
         *,
         max_results: int = 10,
     ) -> list[ScrapedPost]:
         """Search LinkedIn for posts matching *query* via Apify.
 
         Args:
-            query: Keyword search string.
+            query: Keyword search string or ScrapingWeapon object.
             max_results: Maximum posts to return.
 
         Returns:
@@ -50,9 +50,11 @@ class LinkedInScraper(ScraperPlatform):
         """
         actor_input = self._build_actor_input(query, max_results)
 
+        query_str = query.value if isinstance(query, ScrapingWeapon) else query
+
         logger.info(
             "LinkedIn search: query=%r  max_results=%d",
-            query,
+            query_str,
             max_results,
         )
 
@@ -63,20 +65,29 @@ class LinkedInScraper(ScraperPlatform):
             memory_mbytes=256,
         )
 
-        posts = self._normalise_results(raw_items, source_query=query)
-        logger.info("LinkedIn search returned %d posts for query=%r", len(posts), query)
+        posts = self._normalise_results(raw_items, source_query=query_str)
+        logger.info("LinkedIn search returned %d posts for query=%r", len(posts), query_str)
         return posts
 
     # ── Private helpers ──────────────────────────────────────────────────
 
     @staticmethod
-    def _build_actor_input(query: str, max_results: int) -> dict[str, Any]:
+    def _build_actor_input(query: str | ScrapingWeapon, max_results: int) -> dict[str, Any]:
         """Construct the JSON input payload for the Apify actor."""
-        return {
-            "searchTerms": [query],
+        payload = {
             "maxResults": max_results,
             "sortBy": "relevance",
         }
+        
+        if isinstance(query, ScrapingWeapon):
+            if query.type == "url":
+                payload["startUrls"] = [{"url": query.value}]
+            else:
+                payload["searchTerms"] = [query.value]
+        else:
+            payload["searchTerms"] = [query]
+            
+        return payload
 
     @classmethod
     def _normalise_results(

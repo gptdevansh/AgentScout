@@ -122,7 +122,7 @@ export default function PipelineRunDetailPage() {
             <div className="flex flex-wrap gap-2">
               {run.queries.map((q, i) => (
                 <Badge key={i} variant="info">
-                  {q}
+                  {typeof q === 'string' ? q : q.value}
                 </Badge>
               ))}
             </div>

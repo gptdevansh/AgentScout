@@ -1,5 +1,11 @@
 /* ── Types mirroring backend schemas ─────────────────────────────────── */
 
+export interface ScrapingWeapon {
+  type: 'keyword' | 'hashtag' | 'url';
+  value: string;
+}
+
+
 export interface PipelineRequest {
   problem_description: string;
   product_description?: string | null;
@@ -19,7 +25,7 @@ export interface PipelineResponse {
   run_id: string | null;
   problem_description: string;
   product_description: string | null;
-  queries: string[];
+  queries: (string | ScrapingWeapon)[];
   posts_found: number;
   posts_analysed: number;
   posts_relevant: number;
@@ -114,7 +120,7 @@ export interface PipelineRunOut {
   product_description: string | null;
   platform: string;
   status: string;
-  queries: string[];
+  queries: (string | ScrapingWeapon)[];
   posts_found: number;
   posts_analysed: number;
   posts_relevant: number;

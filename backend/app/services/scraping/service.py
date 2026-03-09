@@ -10,7 +10,7 @@ for all scraping operations.
 import asyncio
 import logging
 
-from app.services.scraping.models import ScrapedPost
+from app.services.scraping.models import ScrapedPost, ScrapingWeapon
 from app.services.scraping.registry import ScraperRegistry
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class ScrapingService:
 
     async def search(
         self,
-        query: str,
+        query: str | ScrapingWeapon,
         *,
         platform: str = "linkedin",
         max_results: int = 10,
@@ -48,7 +48,7 @@ class ScrapingService:
 
     async def search_multiple_queries(
         self,
-        queries: list[str],
+        queries: list[str] | list[ScrapingWeapon],
         *,
         platform: str = "linkedin",
         max_results_per_query: int = 10,

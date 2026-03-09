@@ -25,7 +25,7 @@ from app.agents.post_analysis import PostAnalysisAgent, PostAnalysisResult
 from app.agents.query_generator import QueryGeneratorAgent
 from app.models.pipeline_run import RunStatus
 from app.services.persistence import PersistenceService
-from app.services.scraping.models import ScrapedPost
+from app.services.scraping.models import ScrapedPost, ScrapingWeapon
 from app.services.scraping.service import ScrapingService
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class PipelineResult:
     run_id: uuid.UUID | None = None
     problem_description: str = ""
     product_description: str | None = None
-    queries: list[str] = field(default_factory=list)
+    queries: list[ScrapingWeapon] = field(default_factory=list)
     posts_found: int = 0
     posts_analysed: int = 0
     posts_relevant: int = 0
@@ -139,7 +139,7 @@ class PipelineOrchestrator:
                 PipelineStepSummary("query_generation", len(queries), _elapsed(t0)),
             )
             await self._persistence.update_pipeline_run(
-                pipeline_run, queries=queries,
+                pipeline_run, queries=[q.model_dump() for q in queries],
             )
             await self._session.commit()  # flush progress for polling
             logger.info("[pipeline] generated %d queries", len(queries))

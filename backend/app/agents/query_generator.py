@@ -13,6 +13,8 @@ from typing import Any
 from app.agents.base import BaseAgent
 from app.agents.prompts.query_generator import SYSTEM_PROMPT, USER_PROMPT
 from app.integrations.ai_models.base import BaseAIClient, ChatMessage
+from app.services.scraping.models import ScrapingWeapon
+from app.integrations.ai_models.base import BaseAIClient, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class QueryGeneratorAgent(BaseAgent):
         *,
         product_description: str | None = None,
         num_queries: int = _DEFAULT_NUM_QUERIES,
-    ) -> list[str]:
+    ) -> list[ScrapingWeapon]:
         """Generate search queries for a given problem.
 
         Args:
@@ -41,7 +43,7 @@ class QueryGeneratorAgent(BaseAgent):
             num_queries: How many queries to generate (default 25).
 
         Returns:
-            A list of unique search-query strings.
+            A list of ScrapingWeapon objects.
         """
         product_context = (
             f"Product context:\n{product_description}"
@@ -82,14 +84,13 @@ class QueryGeneratorAgent(BaseAgent):
     # ── Parsing ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _parse_response(raw: str, *, num_queries: int) -> list[str]:
-        """Extract a list of query strings from the model's raw output.
+    def _parse_response(raw: str, *, num_queries: int) -> list[ScrapingWeapon]:
+        """Extract a list of ScrapingWeapon objects from the model's raw output.
 
         Handles:
         - Clean JSON arrays
         - Markdown-wrapped JSON (```json ... ```)
         - Reasoning-wrapped output (<think>...</think> followed by JSON)
-        - Numbered lists as a last resort
         """
         # Strip <think>…</think> blocks (DeepSeek-R1 reasoning)
         cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
@@ -99,12 +100,26 @@ class QueryGeneratorAgent(BaseAgent):
         cleaned = re.sub(r"```", "", cleaned)
         cleaned = cleaned.strip()
 
+        # Helper to parse array of dicts
+        def to_weapons(parsed: Any) -> list[ScrapingWeapon]:
+            weapons = []
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and "type" in item and "value" in item:
+                        try:
+                            weapons.append(ScrapingWeapon(**item))
+                        except Exception:
+                            pass
+                    elif isinstance(item, str):
+                        # Fallback for unexpected string output
+                        weapons.append(ScrapingWeapon(type="keyword", value=str(item)))
+            return _deduplicate(weapons)[:num_queries]
+
         # Attempt JSON parse
         try:
             parsed = json.loads(cleaned)
-            if isinstance(parsed, list):
-                queries = [str(q).strip() for q in parsed if q and str(q).strip()]
-                return _deduplicate(queries)[:num_queries]
+            if weapons := to_weapons(parsed):
+                return weapons
         except json.JSONDecodeError:
             pass
 
@@ -113,28 +128,21 @@ class QueryGeneratorAgent(BaseAgent):
         if match:
             try:
                 parsed = json.loads(match.group())
-                if isinstance(parsed, list):
-                    queries = [str(q).strip() for q in parsed if q and str(q).strip()]
-                    return _deduplicate(queries)[:num_queries]
+                if weapons := to_weapons(parsed):
+                    return weapons
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: numbered/bulleted list
-        lines = re.findall(r"(?:^|\n)\s*(?:\d+[.)]\s*|[-*]\s*)(.+)", cleaned)
-        if lines:
-            queries = [line.strip().strip('"').strip("'") for line in lines if line.strip()]
-            return _deduplicate(queries)[:num_queries]
-
-        logger.warning("Could not parse query-generator output; returning raw content as one query")
-        return [cleaned[:500]] if cleaned else []
+        logger.warning("Could not parse query-generator output cleanly; returning raw content as fallback keyword")
+        return [ScrapingWeapon(type="keyword", value=cleaned[:500])] if cleaned else []
 
 
-def _deduplicate(items: list[str]) -> list[str]:
-    """Preserve order while removing duplicates (case-insensitive)."""
+def _deduplicate(items: list[ScrapingWeapon]) -> list[ScrapingWeapon]:
+    """Preserve order while removing duplicates by value (case-insensitive)."""
     seen: set[str] = set()
-    result: list[str] = []
+    result: list[ScrapingWeapon] = []
     for item in items:
-        key = item.lower()
+        key = item.value.lower()
         if key not in seen:
             seen.add(key)
             result.append(item)

@@ -58,7 +58,7 @@ class PipelineResponse(BaseModel):
     run_id: uuid.UUID | None = None
     problem_description: str
     product_description: str | None = None
-    queries: list[str] = []
+    queries: list[dict] = []
     posts_found: int = 0
     posts_analysed: int = 0
     posts_relevant: int = 0
@@ -169,7 +169,7 @@ class PipelineRunOut(BaseModel):
     product_description: str | None = None
     platform: str
     status: str
-    queries: list[str] = []
+    queries: list[dict] = []
     posts_found: int = 0
     posts_analysed: int = 0
     posts_relevant: int = 0
