@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 _LINKEDIN_SEARCH_ACTOR = "apimaestro~linkedin-posts-search-scraper-no-cookies"
 
 
-class LinkedInScraper(ScraperPlatform):
+class ApifyLinkedInScraper(ScraperPlatform):
     """Scrapes LinkedIn posts via Apify."""
 
     def __init__(self, apify_client: ApifyClient) -> None:

@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # ── Apify ────────────────────────────────────────────────────────────
     apify_api_token: str = ""
 
+    # ── Scraper Selection ────────────────────────────────────────────────
+    linkedin_scraper_type: str = "playwright"  # "apify" or "playwright"
+
     # ── Rate Limits / Tuning ─────────────────────────────────────────────
     max_search_queries: int = Field(default=3, ge=1, le=100)
     max_posts_per_query: int = Field(default=3, ge=1, le=50)

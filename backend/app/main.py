@@ -18,7 +18,6 @@ from app.api.routes import health, pipeline, posts, comments
 from app.integrations.ai_models.factory import build_deepseek_client, build_gpt_client
 from app.integrations.apify.client import build_apify_client
 from app.services.scraping import ScraperRegistry, ScrapingService
-from app.services.scraping.platforms.linkedin import LinkedInScraper
 from app.agents.query_generator import QueryGeneratorAgent
 from app.agents.post_analysis import PostAnalysisAgent
 from app.agents.writer import WriterAgent
@@ -49,7 +48,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # ── Build scraping service with platform registry ────────────────────
     registry = ScraperRegistry()
-    registry.register(LinkedInScraper(apify_client=app.state.apify_client))
+    
+    if settings.linkedin_scraper_type.lower() == "playwright":
+        from app.services.scraping.platforms.playwright_linkedin import PlaywrightLinkedInScraper
+        registry.register(PlaywrightLinkedInScraper())
+    else:
+        from app.services.scraping.platforms.linkedin import ApifyLinkedInScraper
+        registry.register(ApifyLinkedInScraper(apify_client=app.state.apify_client))
+        
     app.state.scraping_service = ScrapingService(registry=registry)
     logger.info(
         "Scraping service ready — platforms: %s",

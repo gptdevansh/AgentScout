@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Python deps — install in two steps so Docker caches the layer
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . && \
+    playwright install chromium && \
+    playwright install-deps chromium
 
 # App code
 COPY alembic.ini ./
